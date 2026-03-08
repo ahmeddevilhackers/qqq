@@ -2,20 +2,20 @@
   "name": "Grid Monitor - MT4 Command Center",
   "short_name": "Grid Monitor",
   "description": "MT4 Multi-Account Grid Trading Monitor",
-  "start_url": "./index.html",
-  "scope": "./",
+  "start_url": "/qqq/index.html",
+  "scope": "/qqq/",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#080c10",
   "theme_color": "#080c10",
   "icons": [
     {
-      "src": "./icon-192.png",
+      "src": "/qqq/icon-192.png",
       "sizes": "192x192",
       "type": "image/png"
     },
     {
-      "src": "./icon-512.png",
+      "src": "/qqq/icon-512.png",
       "sizes": "512x512",
       "type": "image/png"
     }
