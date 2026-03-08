@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Grid Monitor">
+<meta name="theme-color" content="#080c10">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.json">
+<title>Grid Monitor</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:       #080c10;
+    --bg2:      #0f1419;
+    --bg3:      #161d26;
+    --bg4:      #1c2633;
+    --border:   #1e2d3d;
+    --accent:   #00d4aa;
+    --accent2:  #0088ff;
+    --text:     #cdd9e5;
+    --muted:    #546e7a;
+    --green:    #23d18b;
+    --red:      #f14c4c;
+    --warn:     #e5a00d;
+    --purple:   #bc8cff;
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bot: env(safe-area-inset-bottom, 0px);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  body {
+    font-family: 'DM Sans', -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    min-height: 100dvh;
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+    padding-top: var(--safe-top);
+    padding-bottom: var(--safe-bot);
+  }
+
+  /* ── Subtle grid bg ── */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image:
+      linear-gradient(rgba(0,212,170,0.02) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,212,170,0.02) 1px, transparent 1px);
+    background-size: 32px 32px;
+    pointer-events: none; z-index: 0;
+  }
+
+  /* ════════════════════════════════════════════
+     NAVIGATION TABS (Bottom)
+     ════════════════════════════════════════════ */
+  .bottom-nav {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: rgba(8,12,16,0.95);
+    backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    border-top: 1px solid var(--border);
+    display: flex; z-index: 200;
+    padding-bottom: var(--safe-bot);
+  }
+  .nav-tab {
+    flex: 1; display: flex; flex-direction: column; align-items: center;
+    gap: 2px; padding: 8px 4px 6px;
+    background: none; border: none; color: var(--muted);
+    font-family: 'DM Sans', sans-serif; font-size: 10px; font-weight: 500;
+    cursor: pointer; transition: color 0.2s;
+    text-decoration: none;
+  }
+  .nav-tab.active { color: var(--accent); }
+  .nav-tab svg { width: 22px; height: 22px; }
+
+  /* ════════════════════════════════════════════
+     HEADER
+     ════════════════════════════════════════════ */
+  .header {
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(8,12,16,0.9);
+    backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 16px;
+  }
+  .header-row {
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .header-left { display: flex; align-items: center; gap: 10px; }
+  .logo-icon {
+    width: 32px; height: 32px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; font-weight: 800; color: #000;
+  }
+  .header-title { font-size: 16px; font-weight: 700; color: #fff; }
+  .header-sub { font-size: 10px; color: var(--muted); }
+
+  .header-status { display: flex; align-items: center; gap: 8px; }
+  .live-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 8px var(--green);
+    animation: pulse 2s infinite;
+  }
+  .live-dot.offline { background: var(--red); box-shadow: 0 0 8px var(--red); animation: none; }
+  @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+  .status-text { font-size: 11px; color: var(--muted); font-family: 'Space Mono', monospace; }
+
+  /* ════════════════════════════════════════════
+     PAGES
+     ════════════════════════════════════════════ */
+  .page { display: none; padding: 12px 12px 80px; position: relative; z-index: 1; }
+  .page.active { display: block; animation: fadeUp 0.3s ease; }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* ════════════════════════════════════════════
+     SUMMARY CARDS (Swipeable row)
+     ════════════════════════════════════════════ */
+  .summary-scroll {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+
+  .s-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px;
+    position: relative;
+    overflow: hidden;
+  }
+  .s-card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+  }
+  .s-card.highlight::before {
+    background: linear-gradient(90deg, var(--green), var(--accent));
+    height: 2px;
+  }
+  .s-card.danger-card::before {
+    background: var(--red); height: 2px;
+  }
+  .s-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 4px; }
+  .s-value { font-size: 20px; font-weight: 700; color: #fff; font-family: 'Space Mono', monospace; }
+  .s-value.green { color: var(--green); }
+  .s-value.red { color: var(--red); }
+  .s-value.gold { color: #f0b429; }
+  .s-sub { font-size: 9px; color: var(--muted); margin-top: 2px; }
+
+  /* Big hero card for profit */
+  .profit-hero {
+    background: linear-gradient(135deg, rgba(0,212,170,0.08), rgba(0,136,255,0.05));
+    border: 1px solid rgba(0,212,170,0.2);
+    border-radius: 16px;
+    padding: 16px;
+    margin-bottom: 12px;
+    text-align: center;
+  }
+  .profit-hero .hero-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+  .profit-hero .hero-value { font-size: 32px; font-weight: 700; font-family: 'Space Mono', monospace; margin: 4px 0; }
+  .profit-hero .hero-value.green { color: var(--green); }
+  .profit-hero .hero-value.red { color: var(--red); }
+  .profit-hero .hero-sub { font-size: 11px; color: var(--muted); }
+  .profit-row {
+    display: flex; gap: 8px; margin-bottom: 16px;
+  }
+  .profit-row .s-card { flex: 1; }
+
+  /* ════════════════════════════════════════════
+     FILTERS
+     ════════════════════════════════════════════ */
+  .filters-row {
+    display: flex; gap: 6px; margin-bottom: 12px;
+    overflow-x: auto; -webkit-overflow-scrolling: touch;
+    scrollbar-width: none; padding-bottom: 4px;
+  }
+  .filters-row::-webkit-scrollbar { display: none; }
+  .f-btn {
+    flex-shrink: 0;
+    padding: 6px 12px; border-radius: 20px; font-size: 11px;
+    border: 1px solid var(--border); background: var(--bg2);
+    color: var(--muted); cursor: pointer; transition: all 0.2s;
+    font-family: 'DM Sans', sans-serif; white-space: nowrap;
+  }
+  .f-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(0,212,170,0.08); }
+  .filter-count { font-size: 10px; color: var(--muted); margin-bottom: 8px; }
+
+  /* ════════════════════════════════════════════
+     ACCOUNT CARDS (Mobile optimized)
+     ════════════════════════════════════════════ */
+  .acc-list { display: flex; flex-direction: column; gap: 10px; }
+
+  .m-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+  .m-card.danger { border-color: rgba(241,76,76,0.4); }
+  .m-card.warn   { border-color: rgba(229,160,13,0.4); }
+
+  .m-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 14px;
+    background: var(--bg3);
+    border-bottom: 1px solid var(--border);
+  }
+  .m-name { font-size: 13px; font-weight: 700; color: #fff; }
+  .m-broker { font-size: 9px; color: var(--muted); margin-top: 1px; }
+  .m-badge {
+    padding: 3px 8px; border-radius: 6px; font-size: 10px; font-weight: 700;
+    font-family: 'Space Mono', monospace;
+  }
+  .m-badge.good   { background: rgba(35,209,139,0.12); color: var(--green); }
+  .m-badge.warn   { background: rgba(229,160,13,0.12);  color: var(--warn);  }
+  .m-badge.danger { background: rgba(241,76,76,0.12);   color: var(--red);   }
+
+  /* Stats grid inside card */
+  .m-stats {
+    display: grid; grid-template-columns: repeat(2, 1fr);
+    border-bottom: 1px solid var(--border);
+  }
+  .m-stat {
+    padding: 8px 12px;
+    border-right: 1px solid var(--border);
+  }
+  .m-stat:nth-child(2n) { border-right: none; }
+  .m-stat-label { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+  .m-stat-val { font-size: 13px; font-weight: 600; color: #fff; margin-top: 1px; font-family: 'Space Mono', monospace; }
+  .m-stat-val.green { color: var(--green); }
+  .m-stat-val.red { color: var(--red); }
+
+  /* Baskets (collapsible) */
+  .m-baskets-toggle {
+    width: 100%; padding: 8px 14px;
+    background: none; border: none; border-bottom: 1px solid var(--border);
+    color: var(--muted); font-size: 11px; font-family: 'DM Sans', sans-serif;
+    cursor: pointer; text-align: left;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .m-baskets-toggle .arrow { transition: transform 0.2s; }
+  .m-baskets-toggle.open .arrow { transform: rotate(180deg); }
+
+  .m-baskets-body { display: none; }
+  .m-baskets-body.open { display: block; }
+
+  .m-basket-row {
+    display: grid; grid-template-columns: 1fr auto auto;
+    padding: 6px 14px; gap: 8px; align-items: center;
+    border-bottom: 1px solid rgba(30,45,61,0.4);
+    font-size: 11px;
+  }
+  .m-basket-row:last-child { border-bottom: none; }
+  .m-sym { font-weight: 600; color: #fff; font-size: 12px; }
+  .m-side { display: flex; gap: 6px; align-items: center; }
+  .m-side-badge {
+    display: inline-block; padding: 1px 4px; border-radius: 3px;
+    font-size: 8px; font-weight: 700; letter-spacing: 0.3px;
+  }
+  .role-win  { background: rgba(56,139,253,0.2);  color: #388bfd;  }
+  .role-lose { background: rgba(248,81,73,0.2);   color: #f85149; }
+  .role-trl  { background: rgba(188,140,255,0.2); color: var(--purple);}
+  .m-pnl { font-family: 'Space Mono', monospace; font-size: 11px; font-weight: 600; text-align: right; }
+  .m-pnl.green { color: var(--green); }
+  .m-pnl.red { color: var(--red); }
+
+  .m-footer {
+    padding: 6px 14px; background: var(--bg3);
+    display: flex; justify-content: space-between; align-items: center; font-size: 10px;
+  }
+
+  /* ════════════════════════════════════════════
+     SETTINGS PAGE
+     ════════════════════════════════════════════ */
+  .settings-group {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 14px; overflow: hidden; margin-bottom: 16px;
+  }
+  .settings-title {
+    font-size: 12px; font-weight: 600; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 1px;
+    padding: 12px 16px 8px;
+  }
+  .settings-item {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .settings-item:last-child { border-bottom: none; }
+  .settings-item label { display: block; font-size: 11px; color: var(--muted); margin-bottom: 6px; }
+  .settings-item input {
+    width: 100%; padding: 10px 12px;
+    background: var(--bg3); border: 1px solid var(--border);
+    border-radius: 8px; color: #fff; font-family: 'Space Mono', monospace;
+    font-size: 13px; outline: none;
+  }
+  .settings-item input:focus { border-color: var(--accent); }
+
+  .btn-connect {
+    width: 100%; padding: 14px; border: none; border-radius: 12px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    color: #000; font-family: 'DM Sans', sans-serif;
+    font-size: 14px; font-weight: 700; cursor: pointer;
+    transition: opacity 0.2s;
+  }
+  .btn-connect:active { opacity: 0.8; }
+
+  /* Delete btn */
+  .m-delete {
+    width: 28px; height: 28px;
+    border-radius: 50%; border: 1px solid rgba(241,76,76,0.3);
+    background: rgba(241,76,76,0.06);
+    color: var(--red); font-size: 14px; font-weight: 700;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    font-family: monospace;
+  }
+
+  /* Empty state */
+  .empty-state {
+    text-align: center; padding: 60px 20px; color: var(--muted);
+  }
+  .empty-icon { font-size: 40px; margin-bottom: 12px; }
+  .empty-title { font-size: 16px; color: var(--text); font-weight: 600; margin-bottom: 6px; }
+
+  /* Loading */
+  .loading { text-align: center; padding: 40px; color: var(--muted); }
+  .spin {
+    display: inline-block; width: 22px; height: 22px;
+    border: 2px solid var(--border); border-top-color: var(--accent);
+    border-radius: 50%; animation: spin 0.8s linear infinite;
+    margin-bottom: 8px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Scrollbar hide */
+  ::-webkit-scrollbar { width: 0; height: 0; }
+
+  /* Pull to refresh indicator */
+  .pull-indicator {
+    text-align: center; padding: 8px; font-size: 10px; color: var(--accent);
+    display: none;
+  }
+  .pull-indicator.show { display: block; }
+</style>
+</head>
+<body>
+
+<!-- ═══════ HEADER ═══════ -->
+<div class="header">
+  <div class="header-row">
+    <div class="header-left">
+      <div class="logo-icon">G</div>
+      <div>
+        <div class="header-title">GRID MONITOR</div>
+        <div class="header-sub">Command Center</div>
+      </div>
+    </div>
+    <div class="header-status">
+      <span class="status-text" id="refreshTimer">5s</span>
+      <div class="live-dot" id="statusDot"></div>
+      <span class="status-text" id="statusText">...</span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ PAGE: OVERVIEW ═══════ -->
+<div class="page active" id="page-overview">
+
+  <!-- Profit Hero -->
+  <div class="profit-hero" id="profitHero">
+    <div class="hero-label">Today's Profit (All Accounts)</div>
+    <div class="hero-value green" id="h-daily">$0.00</div>
+    <div class="hero-sub" id="h-daily-sub">—</div>
+  </div>
+
+  <div class="profit-row">
+    <div class="s-card highlight">
+      <div class="s-label">Cumulative</div>
+      <div class="s-value green" id="s-cumulative" style="font-size:16px">$0.00</div>
+      <div class="s-sub">Since tracking</div>
+    </div>
+    <div class="s-card">
+      <div class="s-label">Floating P&L</div>
+      <div class="s-value" id="s-pnl" style="font-size:16px">$0.00</div>
+      <div class="s-sub">Unrealized</div>
+    </div>
+  </div>
+
+  <div class="summary-scroll">
+    <div class="s-card">
+      <div class="s-label">Accounts</div>
+      <div class="s-value gold" id="s-accounts">0</div>
+    </div>
+    <div class="s-card">
+      <div class="s-label">Balance</div>
+      <div class="s-value" id="s-balance">$0</div>
+    </div>
+    <div class="s-card">
+      <div class="s-label">Equity</div>
+      <div class="s-value" id="s-equity">$0</div>
+    </div>
+    <div class="s-card">
+      <div class="s-label">Orders</div>
+      <div class="s-value" id="s-orders">0</div>
+    </div>
+  </div>
+
+  <div class="s-card danger-card" style="margin-bottom:16px" id="dangerCard">
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <div>
+        <div class="s-label">Danger Accounts</div>
+        <div class="s-value red" id="s-danger" style="font-size:18px">0</div>
+      </div>
+      <div style="font-size:9px;color:var(--muted)">Margin &lt; 150%</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ PAGE: ACCOUNTS ═══════ -->
+<div class="page" id="page-accounts">
+  <div class="filters-row">
+    <button class="f-btn active" onclick="setFilter('all', this)">ALL</button>
+    <button class="f-btn" onclick="setFilter('danger', this)">🔴 Danger</button>
+    <button class="f-btn" onclick="setFilter('warn', this)">🟡 Warning</button>
+    <button class="f-btn" onclick="setFilter('good', this)">🟢 Healthy</button>
+    <button class="f-btn" onclick="setFilter('trailing', this)">🟣 Trailing</button>
+  </div>
+  <div class="filter-count" id="filterCount">—</div>
+  <div class="acc-list" id="accountsList">
+    <div class="loading"><div class="spin"></div><div>Loading...</div></div>
+  </div>
+</div>
+
+<!-- ═══════ PAGE: SETTINGS ═══════ -->
+<div class="page" id="page-settings">
+  <div class="settings-title">Server Connection</div>
+  <div class="settings-group">
+    <div class="settings-item">
+      <label>Server URL</label>
+      <input type="url" id="serverUrl" placeholder="https://your-server.onrender.com" />
+    </div>
+    <div class="settings-item">
+      <label>API Key</label>
+      <input type="text" id="apiKey" placeholder="mt4monitor2024" />
+    </div>
+  </div>
+  <button class="btn-connect" onclick="saveConfig()">CONNECT</button>
+  <div style="text-align:center;margin-top:20px;font-size:10px;color:var(--muted)">
+    Grid Monitor v3.0 PWA<br>
+    Auto-refresh: 5 seconds
+  </div>
+</div>
+
+<!-- ═══════ BOTTOM NAV ═══════ -->
+<div class="bottom-nav">
+  <button class="nav-tab active" onclick="showPage('overview', this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+    Overview
+  </button>
+  <button class="nav-tab" onclick="showPage('accounts', this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+    Accounts
+  </button>
+  <button class="nav-tab" onclick="showPage('settings', this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+    Settings
+  </button>
+</div>
+
+<script>
+// ═══════ CONFIG ═══════
+let SERVER_URL = localStorage.getItem('mt4_server') || '';
+let API_KEY    = localStorage.getItem('mt4_key')    || 'mt4monitor2024';
+let allAccounts = [];
+let currentFilter = 'all';
+let refreshInterval = null;
+let countdown = 5;
+
+document.getElementById('serverUrl').value = SERVER_URL;
+document.getElementById('apiKey').value    = API_KEY;
+
+function saveConfig() {
+  SERVER_URL = document.getElementById('serverUrl').value.trim().replace(/\/$/, '');
+  API_KEY    = document.getElementById('apiKey').value.trim();
+  localStorage.setItem('mt4_server', SERVER_URL);
+  localStorage.setItem('mt4_key',    API_KEY);
+  showPage('overview', document.querySelector('.nav-tab'));
+  fetchData();
+}
+
+// ═══════ NAVIGATION ═══════
+function showPage(name, btn) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  btn.classList.add('active');
+}
+
+// ═══════ FETCH ═══════
+async function fetchData() {
+  if (!SERVER_URL) {
+    setStatus(false, 'No server');
+    return;
+  }
+  try {
+    const res = await fetch(`${SERVER_URL}/accounts`, {
+      headers: { 'X-API-Key': API_KEY }
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    allAccounts = data.accounts || [];
+    setStatus(true, allAccounts.length + ' acc');
+    updateOverview();
+    renderAccounts();
+  } catch (e) {
+    setStatus(false, 'Offline');
+    console.error(e);
+  }
+}
+
+function setStatus(online, text) {
+  document.getElementById('statusDot').className = 'live-dot' + (online ? '' : ' offline');
+  document.getElementById('statusText').textContent = text;
+}
+
+// ═══════ OVERVIEW ═══════
+function updateOverview() {
+  let totalBal=0, totalEq=0, totalOrd=0, danger=0;
+  let totalDaily=0, totalCumul=0;
+
+  allAccounts.forEach(a => {
+    totalBal   += a.balance || 0;
+    totalEq    += a.equity  || 0;
+    totalOrd   += a.open_orders || 0;
+    totalDaily += a.daily_profit || 0;
+    totalCumul += a.cumulative_profit || 0;
+    const ml = a.margin_level || 0;
+    if (ml > 0 && ml < 150) danger++;
+  });
+
+  const pnl = totalEq - totalBal;
+
+  // Hero daily profit
+  const dEl = document.getElementById('h-daily');
+  dEl.textContent = sign(totalDaily) + '$' + fmt(totalDaily);
+  dEl.className = 'hero-value ' + (totalDaily >= 0 ? 'green' : 'red');
+  document.getElementById('h-daily-sub').textContent =
+    allAccounts.length + ' accounts · ' + new Date().toLocaleDateString('en-US', {month:'short', day:'numeric'});
+
+  // Cumulative
+  const cEl = document.getElementById('s-cumulative');
+  cEl.textContent = sign(totalCumul) + '$' + fmt(totalCumul);
+  cEl.className = 's-value ' + (totalCumul >= 0 ? 'green' : 'red');
+
+  // Floating
+  const pEl = document.getElementById('s-pnl');
+  pEl.textContent = sign(pnl) + '$' + fmt(pnl);
+  pEl.className = 's-value ' + (pnl >= 0 ? 'green' : 'red');
+
+  document.getElementById('s-accounts').textContent = allAccounts.length;
+  document.getElementById('s-balance').textContent  = '$' + fmt(totalBal);
+  document.getElementById('s-equity').textContent   = '$' + fmt(totalEq);
+  document.getElementById('s-orders').textContent   = totalOrd;
+  document.getElementById('s-danger').textContent   = danger;
+
+  // Hide danger card if no danger
+  document.getElementById('dangerCard').style.display = danger > 0 ? 'block' : 'none';
+}
+
+// ═══════ ACCOUNTS LIST ═══════
+function renderAccounts() {
+  const list = document.getElementById('accountsList');
+  let filtered = allAccounts.filter(a => {
+    const ml = a.margin_level || 0;
+    switch (currentFilter) {
+      case 'danger':   return ml > 0 && ml < 150;
+      case 'warn':     return ml >= 150 && ml < 250;
+      case 'good':     return ml >= 250 || ml === 0;
+      case 'trailing': return (a.baskets||[]).some(b => (b.buy_levels||0)>5 || (b.sell_levels||0)>5);
+      default:         return true;
+    }
+  });
+
+  document.getElementById('filterCount').textContent =
+    `Showing ${filtered.length} of ${allAccounts.length}`;
+
+  if (filtered.length === 0) {
+    list.innerHTML = `<div class="empty-state">
+      <div class="empty-icon">${allAccounts.length === 0 ? '📡' : '🔍'}</div>
+      <div class="empty-title">${allAccounts.length === 0 ? 'No accounts connected' : 'No match'}</div>
+    </div>`;
+    return;
+  }
+
+  filtered.sort((a,b) => (a.margin_level||9999) - (b.margin_level||9999));
+  list.innerHTML = filtered.map(a => buildCard(a)).join('');
+}
+
+function buildCard(a) {
+  const ml = a.margin_level || 0;
+  const fl = (a.equity||0) - (a.balance||0);
+
+  let cardCl = 'm-card';
+  let badgeCl = 'm-badge good';
+  let badgeTxt = ml > 0 ? ml.toFixed(0)+'%' : 'N/A';
+  if (ml > 0 && ml < 150)       { cardCl += ' danger'; badgeCl = 'm-badge danger'; }
+  else if (ml >= 150 && ml < 250){ cardCl += ' warn';   badgeCl = 'm-badge warn'; }
+
+  const baskets = a.baskets || [];
+  const netPnl = baskets.reduce((s,b) => s + (b.net_profit||0), 0);
+  const uid = (a.account_id||'').replace(/[^a-zA-Z0-9]/g, '_');
+
+  let basketsHtml = '';
+  if (baskets.length > 0) {
+    basketsHtml = baskets.map(b => {
+      const bRole = b.buy_levels > 5 ? 'trl' : b.buy_profit >= 0 ? 'win' : 'lose';
+      const sRole = b.sell_levels > 5 ? 'trl' : b.sell_profit >= 0 ? 'win' : 'lose';
+      const nCl = (b.net_profit||0) >= 0 ? 'green' : 'red';
+      return `<div class="m-basket-row">
+        <div class="m-sym">${b.symbol||''}</div>
+        <div class="m-side">
+          <span class="m-side-badge role-${bRole}">B:${bRole.toUpperCase()}</span>
+          <span class="m-side-badge role-${sRole}">S:${sRole.toUpperCase()}</span>
+        </div>
+        <div class="m-pnl ${nCl}">${sign(b.net_profit||0)}$${(b.net_profit||0).toFixed(2)}</div>
+      </div>`;
+    }).join('');
+  } else {
+    basketsHtml = '<div style="padding:12px;text-align:center;color:var(--muted);font-size:11px">No open baskets</div>';
+  }
+
+  return `<div class="${cardCl}">
+    <div class="m-head">
+      <div>
+        <div class="m-name">${a.account_id || 'Unknown'}</div>
+        <div class="m-broker">${a.broker||''} · #${a.account_number||''}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <span class="${badgeCl}">${badgeTxt}</span>
+        <button class="m-delete" onclick="deleteAccount('${(a.account_id||'').replace(/'/g,"\\'")}')">✕</button>
+      </div>
+    </div>
+    <div class="m-stats">
+      <div class="m-stat"><div class="m-stat-label">Balance</div><div class="m-stat-val">$${fmt(a.balance||0)}</div></div>
+      <div class="m-stat"><div class="m-stat-label">Equity</div><div class="m-stat-val">$${fmt(a.equity||0)}</div></div>
+      <div class="m-stat"><div class="m-stat-label">Floating</div><div class="m-stat-val ${fl>=0?'green':'red'}">${sign(fl)}$${fmt(fl)}</div></div>
+      <div class="m-stat"><div class="m-stat-label">Free Margin</div><div class="m-stat-val">$${fmt(a.free_margin||0)}</div></div>
+    </div>
+    <div class="m-stats">
+      <div class="m-stat"><div class="m-stat-label">Today's Profit</div><div class="m-stat-val ${(a.daily_profit||0)>=0?'green':'red'}">${sign(a.daily_profit||0)}$${fmt(a.daily_profit||0)}</div></div>
+      <div class="m-stat"><div class="m-stat-label">Cumulative</div><div class="m-stat-val ${(a.cumulative_profit||0)>=0?'green':'red'}">${sign(a.cumulative_profit||0)}$${fmt(a.cumulative_profit||0)}</div></div>
+    </div>
+    <button class="m-baskets-toggle" onclick="toggleBaskets('${uid}', this)">
+      <span>Baskets (${baskets.length})</span>
+      <span class="arrow">▾</span>
+    </button>
+    <div class="m-baskets-body" id="baskets-${uid}">
+      ${basketsHtml}
+    </div>
+    <div class="m-footer">
+      <span style="color:var(--muted)">Orders: ${a.open_orders||0}</span>
+      <span class="${netPnl>=0?'green':'red'}" style="font-weight:700;font-family:'Space Mono',monospace">${sign(netPnl)}$${netPnl.toFixed(2)}</span>
+    </div>
+  </div>`;
+}
+
+function toggleBaskets(uid, btn) {
+  const body = document.getElementById('baskets-' + uid);
+  const open = body.classList.toggle('open');
+  btn.classList.toggle('open', open);
+}
+
+// ═══════ DELETE ═══════
+async function deleteAccount(accountId) {
+  if (!confirm(`حذف "${accountId}"؟`)) return;
+  try {
+    const res = await fetch(`${SERVER_URL}/account/${encodeURIComponent(accountId)}`, {
+      method: 'DELETE',
+      headers: { 'X-API-Key': API_KEY }
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    allAccounts = allAccounts.filter(a => a.account_id !== accountId);
+    updateOverview();
+    renderAccounts();
+  } catch(e) {
+    alert('فشل: ' + e.message);
+  }
+}
+
+// ═══════ HELPERS ═══════
+function fmt(n) {
+  return Math.abs(n) >= 1000 ? (n/1000).toFixed(2)+'k' : Math.abs(n).toFixed(2);
+}
+function sign(n) { return n >= 0 ? '+' : '-'; }
+
+function setFilter(f, btn) {
+  currentFilter = f;
+  document.querySelectorAll('.f-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderAccounts();
+}
+
+// ═══════ AUTO REFRESH ═══════
+function startRefresh() {
+  fetchData();
+  countdown = 5;
+  clearInterval(refreshInterval);
+  refreshInterval = setInterval(() => {
+    countdown--;
+    document.getElementById('refreshTimer').textContent = countdown + 's';
+    if (countdown <= 0) {
+      fetchData();
+      countdown = 5;
+    }
+  }, 1000);
+}
+
+startRefresh();
+</script>
+</body>
+</html>
