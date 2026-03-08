@@ -169,6 +169,15 @@
   .profit-hero .hero-value.green { color: var(--green); }
   .profit-hero .hero-value.red { color: var(--red); }
   .profit-hero .hero-sub { font-size: 11px; color: var(--muted); }
+  .btn-reset {
+    margin-top: 10px; padding: 8px 20px;
+    border: 1px solid rgba(229,160,13,0.4); border-radius: 8px;
+    background: rgba(229,160,13,0.1);
+    color: var(--warn); font-family: 'DM Sans', sans-serif;
+    font-size: 12px; font-weight: 600; cursor: pointer;
+    transition: all 0.2s;
+  }
+  .btn-reset:active { background: rgba(229,160,13,0.25); transform: scale(0.96); }
   .profit-row {
     display: flex; gap: 8px; margin-bottom: 16px;
   }
@@ -379,6 +388,7 @@
     <div class="hero-label">Today's Profit (All Accounts)</div>
     <div class="hero-value green" id="h-daily">$0.00</div>
     <div class="hero-sub" id="h-daily-sub">—</div>
+    <button class="btn-reset" onclick="resetProfit()">🔄 Reset Counter</button>
   </div>
 
   <div class="profit-row">
@@ -692,6 +702,24 @@ async function deleteAccount(accountId) {
     renderAccounts();
   } catch(e) {
     alert('فشل: ' + e.message);
+  }
+}
+
+// ═══════ RESET PROFIT ═══════
+async function resetProfit() {
+  if (!confirm('تصفير عداد الأرباح؟ هيبدأ يعد من الأول')) return;
+  if (!SERVER_URL) { alert('Server not configured'); return; }
+  try {
+    const res = await fetch(`${SERVER_URL}/reset-profit`, {
+      method: 'POST',
+      headers: { 'X-API-Key': API_KEY }
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    alert(`تم التصفير ✅\n${data.accounts_reset} accounts reset`);
+    fetchData();
+  } catch(e) {
+    alert('فشل التصفير: ' + e.message);
   }
 }
 
